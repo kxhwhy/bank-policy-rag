@@ -98,6 +98,105 @@ PDF 与 Word 的文本不是「干净」的，还原折行这一段专门处理�
 替换成真实制度文本时，只要保持 `文本 > ## 第X章 > ### 第X条 小标题` 的结构，
 解析器即可直接复用；若原件本身就是 PDF 或 Word，放进 `data/raw/` 即可，无需先转格式。
 
+## 准备模型权重（必做，约 4.3GB）
+
+两个 BGE 模型不进仓库，运行前需自行下载到 `models/` 下：
+
+```
+models/
+├── bge-m3/                 # 稠密+稀疏双向量编码器，约 2.2GB
+└── bge-reranker-large/     # 交叉编码器精排，约 2.1GB
+```
+
+模型文件缺失时程序会直接报错退出——配置里 `ALLOW_HASH_FALLBACK` 默认关闭，
+因为哈希向量只能验证流程连通，语义检索效果不可用，容易把"跑起来了"误当成"跑对了"。
+
+### 方式一：HuggingFace 镜像（已验证）
+
+国内直连 `huggingface.co` 会超时，需走镜像站。下面这段是 Python 脚本，
+**不用** `hf download` 命令行——命令行在 PowerShell 下传多个 `--include` 参数时
+只有第一个生效，会静默漏下 `config.json`，导致后面加载报
+`Unrecognized model ... Should have a model_type key`。
+
+新建 `download_models.py`（下两段合并成一个文件即可）：
+
+```python
+import os
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
+os.environ['HF_HUB_DISABLE_XET'] = '1'          # Xet 后端在镜像上会 401，必须关掉
+from huggingface_hub import snapshot_download
+
+# BGE-M3：12 个文件，只取推理必需的，跳过 onnx/ 与 imgs/ 约省 2GB
+snapshot_download(
+    repo_id='BAAI/bge-m3',
+    local_dir='models/bge-m3',
+    allow_patterns=[
+        'config.json', 'config_sentence_transformers.json', 'modules.json',
+        'sentence_bert_config.json', 'pytorch_model.bin',
+        'colbert_linear.pt', 'sparse_linear.pt',           # 稀疏与多向量分支必需
+        'tokenizer.json', 'tokenizer_config.json',
+        'special_tokens_map.json', 'sentencepiece.bpe.model',
+        '1_Pooling/config.json',
+    ],
+)
+
+# BGE-Reranker：官方仓库同时存了 model.safetensors 和 model.onnx_data 各 2.1GB，
+# 不限文件会下 4.2GB，这里只取 safetensors
+snapshot_download(
+    repo_id='BAAI/bge-reranker-large',
+    local_dir='models/bge-reranker-large',
+    allow_patterns=[
+        'config.json', 'model.safetensors',
+        'tokenizer.json', 'tokenizer_config.json',
+        'special_tokens_map.json', 'sentencepiece.bpe.model',
+    ],
+)
+print('模型下载完成')
+```
+
+```bash
+pip install -U huggingface_hub
+python download_models.py
+```
+
+在项目根目录执行，大约 5 分钟下完 4.3GB。
+
+### 方式二：ModelScope（国内更稳，已验证）
+
+```python
+# download_models.py
+from modelscope import snapshot_download
+
+snapshot_download('BAAI/bge-m3', local_dir='models/bge-m3')
+snapshot_download('BAAI/bge-reranker-large', local_dir='models/bge-reranker-large')
+print('模型下载完成')
+```
+
+```bash
+pip install modelscope
+python download_models.py
+```
+
+ModelScope 会连 `onnx/`、`imgs/` 一起下，总占用约 8GB 而非 4.3GB，
+但省去了配置镜像和排除文件这一步。磁盘紧张时优先用方式一。
+
+### 验证下载完整性
+
+```python
+from milvus_model.hybrid import BGEM3EmbeddingFunction
+from sentence_transformers import CrossEncoder
+
+fn = BGEM3EmbeddingFunction(model_name_or_path='models/bge-m3', device='cpu', use_fp16=False)
+out = fn(['测试文本'])
+print('BGE-M3  稠密维度', out['dense'].shape[1], '稀疏维度', out['sparse'].shape[1])
+
+m = CrossEncoder('models/bge-reranker-large', device='cpu')
+print('Reranker 打分', m.predict([('消费贷能贷多少', '消费贷额度不超过30万元')]))
+```
+
+预期输出稠密 1024 维、稀疏 250002 维，且相关内容打分接近 1.0。
+任一环节报 `Unrecognized model` 说明 `config.json` 没下全，重跑对应下载命令。
+
 ## 快速开始
 
 ### 方式一：Docker（推荐，一条命令起全套）
@@ -128,7 +227,7 @@ docker compose exec -T app python -m scripts.seed_faq --apply
 ```
 
 模型权重不打进镜像，而是通过 `./models:/app/models:ro` 只读挂载。
-首次运行前需把 `bge-m3` 与 `bge-reranker-large` 放到项目的 `models/` 下。
+首次运行前请先按上文「准备模型权重」把 `bge-m3` 与 `bge-reranker-large` 下载到 `models/` 下。
 镜像里 torch 从 CPU 专用源安装（`--index-url .../whl/cpu`），
 否则会连带拉入约 5GB 的 CUDA 依赖，镜像从 2.1GB 膨胀到 6.9GB。
 
