@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>恒信银行制度智能问答</title>
+<style>
+  :root {
+    --bg: #f4f5f8;
+    --panel: #ffffff;
+    --ink: #1c2430;
+    --ink-2: #57637a;
+    --ink-3: #8b95a9;
+    --line: #e3e7ee;
+    --brand: #b4232a;
+    --brand-soft: #fdf2f3;
+    --ok: #1f8b4c;
+    --warn: #b46a1c;
+    --radius: 10px;
+    --col-gap: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.65;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: none;
+  }
+  header .logo {
+    width: 30px; height: 30px; border-radius: 6px;
+    background: var(--brand); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+  header .meta { margin-left: auto; color: var(--ink-3); font-size: 12.5px; }
+
+  /* ── 三栏布局：历史 | 当前答案 | 制度清单 ── */
+  .layout {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr) 300px;
+    gap: var(--col-gap);
+    padding: var(--col-gap) 24px 18px;
+    max-width: 1560px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .panel-head {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+    font-size: 13.5px;
+    display: flex; align-items: center; gap: 8px;
+    flex: none;
+  }
+  .panel-head .hint { font-weight: 400; color: var(--ink-3); font-size: 12px; margin-left: auto; }
+  .panel-body { flex: 1; min-height: 0; overflow-y: auto; }
+
+  /* ── 左栏：历史提问 ── */
+  .history-list { padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .hist-item {
+    padding: 8px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background .12s, border-color .12s;
+  }
+  .hist-item:hover { background: #f7f8fa; }
+  .hist-item.active {
+    background: var(--brand-soft);
+    border-color: #f2d4d6;
+  }
+  .hist-item .hq {
+    font-size: 13px;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .hist-item.active .hq { color: var(--brand); font-weight: 550; }
+  .hist-item .hm {
+    margin-top: 3px;
+    font-size: 11.5px;
+    color: var(--ink-3);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .hist-item .hm .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--ink-3); }
+  .hist-item .hm .refused { color: var(--warn); }
+
+  /* ── 中栏：提问 + 当前答案 ── */
+  .askbox { padding: 14px 16px; border-bottom: 1px solid var(--line); flex: none; }
+  .askbox textarea {
+    width: 100%;
+    min-height: 68px;
+    max-height: 180px;
+    resize: vertical;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 11px;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .askbox textarea:focus { border-color: var(--brand); }
+  .row { display: flex; align-items: center; gap: 9px; margin-top: 9px; flex-wrap: wrap; }
+  select, button {
+    font-family: inherit;
+    font-size: 13.5px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #fff;
+    font-weight: 550;
+    padding: 6px 20px;
+  }
+  button.primary:disabled { opacity: .55; cursor: not-allowed; }
+  button.ghost { color: var(--ink-2); }
+  .kbd-hint { margin-left: auto; color: var(--ink-3); font-size: 11.5px; }
+  /* 检索范围提示：只读，不是可选项。用户不该猜该在哪个条线里找。 */
+  .scope-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.5;
+  }
+  .scope-hint b { color: var(--ink-2); font-weight: 600; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+  .chip {
+    font-size: 12.5px;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    color: var(--ink-2);
+    cursor: pointer;
+    background: #fafbfc;
+  }
+  .chip:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+
+  .current { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; }
+  .qa-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; }
+  .q-text { font-weight: 600; font-size: 15px; margin-bottom: 12px; word-break: break-word; }
+  .badge {
+    font-size: 11.5px; padding: 1px 8px; border-radius: 20px;
+    background: var(--brand-soft); color: var(--brand);
+    border: 1px solid #f2d4d6;
+  }
+  .badge.gray { background: #f2f4f7; color: var(--ink-2); border-color: var(--line); }
+  .badge.ok { background: #eef8f1; color: var(--ok); border-color: #cfe9d9; }
+  .badge.warn { background: #fdf6ec; color: var(--warn); border-color: #f4e3c8; }
+
+  .answer-body { white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.85; }
+  .answer-body.refused {
+    color: var(--warn);
+    background: #fdf9f3;
+    border: 1px solid #f2e4cc;
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+
+  .src-block { margin-top: 18px; }
+  .src-block-title {
+    font-size: 12.5px; color: var(--ink-3); margin-bottom: 8px;
+    padding-bottom: 6px; border-bottom: 1px dashed var(--line);
+  }
+  .src-list { display: flex; flex-direction: column; gap: 8px; }
+  .src {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--brand);
+    border-radius: 6px;
+    padding: 9px 12px;
+    background: #fcfcfd;
+  }
+  .src-head {
+    font-size: 12.5px; color: var(--ink-2);
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .src-head b { color: var(--ink); font-weight: 600; }
+  .src-body {
+    margin-top: 5px; font-size: 13px; color: var(--ink-2);
+    white-space: pre-wrap; max-height: 0; overflow: hidden;
+    transition: max-height .2s ease;
+  }
+  .src.open .src-body { max-height: 900px; }
+  .src-toggle { margin-left: auto; font-size: 12px; color: var(--brand); cursor: pointer; }
+
+  /* ── 右栏：制度清单 ── */
+  .side-list { padding: 6px 0; }
+  .doc-item { padding: 9px 14px; border-bottom: 1px solid #f0f2f6; font-size: 13px; }
+  .doc-item:last-child { border-bottom: none; }
+  .doc-item .t { font-weight: 550; }
+  .doc-item .m { color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+  .status-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    margin-right: 5px; vertical-align: middle;
+  }
+  .status-dot.active { background: var(--ok); }
+  .status-dot.repealed { background: var(--ink-3); }
+  .status-dot.pending { background: var(--warn); }
+
+  .empty { color: var(--ink-3); padding: 28px 14px; text-align: center; font-size: 13px; }
+  .loading-dots::after { content: ''; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+
+  .statusbar {
+    flex: none;
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+    padding: 7px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .statusbar .sep { color: var(--line); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #d6dbe4; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #c2c9d4; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 1200px) {
+    .layout { grid-template-columns: 220px minmax(0, 1fr); }
+    .layout > .panel:nth-child(3) { display: none; }
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    .layout > .panel:nth-child(1) { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">恒</div>
+  <h1>恒信银行制度智能问答</h1>
+  <div class="meta" id="sysMeta">加载中…</div>
+</header>
+
+<div class="layout">
+  <!-- 左：历史提问 -->
+  <div class="panel">
+    <div class="panel-head">
+      历史提问
+      <span class="hint" id="histCount"></span>
+    </div>
+    <div class="panel-body">
+      <div class="history-list" id="history">
+        <div class="empty">还没有提问记录</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 中：提问 + 当前答案 -->
+  <div class="panel">
+    <div class="askbox">
+      <textarea id="question" placeholder="例如：个人消费贷款单户额度上限是多少？审批权限怎么划分？"></textarea>
+      <div class="row">
+        <button class="primary" id="send">提问</button>
+        <button class="ghost" id="reset">清空会话</button>
+        <span class="kbd-hint">Ctrl + Enter 提交</span>
+      </div>
+      <div class="scope-hint" id="scopeHint"></div>
+      <div class="chips" id="samples"></div>
+    </div>
+    <div class="current" id="current">
+      <div class="empty">输入问题开始检索制度条款</div>
+    </div>
+  </div>
+
+  <!-- 右：制度清单 -->
+  <div class="panel">
+    <div class="panel-head">制度清单<span class="hint" id="docCount"></span></div>
+    <div class="panel-body">
+      <div class="side-list" id="docList"><div class="empty">加载中…</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="statusStats">制度文件 – 份 · 现行条款 – 条</span>
+  <span class="sep">|</span>
+  <span id="statusModel">模型状态未知</span>
+  <span class="sep">|</span>
+  <span>回答仅依据现行有效条款生成，涉及个案审批请按流程报有权审批人</span>
+</div>
+
+<script>
+const SAMPLE_QUESTIONS = [
+  "个人消费贷款单户额度上限是多少",
+  "信用类消费贷款的审批权限怎么划分",
+  "大额现金存取需要登记什么",
+  "受益所有人怎么认定",
+  "客户风险等级分为几级，多久评定一次"
+];
+
+/** 历史会话：内存里保留完整问答，供点击回看 */
+const history = [];
+let activeIndex = -1;
+let sessionId = null;
+let busy = false;
+
+const $ = (id) => document.getElementById(id);
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+async function loadOverview() {
+  try {
+    const res = await fetch('/api/overview');
+    const data = await res.json();
+    const s = data.stats;
+    $('sysMeta').textContent = `召回 ${data.retrieval_k} 条 · 相似度阈值 ${data.min_similarity}`;
+    $('statusStats').textContent =
+      `制度文件 ${s.document_total} 份 · 现行条款 ${s.clause_active} 条 · 已废止 ${s.document_total - s.document_active} 份`;
+    $('statusModel').textContent = data.llm_available ? '生成模型已接入' : '生成模型未配置（仅返回条款原文）';
+  } catch (e) {
+    $('sysMeta').textContent = '服务未启动';
+  }
+}
+
+/** 检索范围提示：条线由系统按问题自动判定，用户不需要（也无法）手动指定。
+ *  显示出来是为了让用户知道这次是在哪个条线的制度里找的，判断错了能察觉。 */
+function renderScope(line, strategy) {
+  const box = $('scopeHint');
+  if (!line) {
+    box.innerHTML = '检索范围：<b>全部业务条线</b>（未从问题中识别出具体条线）';
+    return;
+  }
+  const how = strategy === 'FAQ 精确命中' ? '标准问法命中' : '按问题自动判定';
+  box.innerHTML = `检索范围：<b>${line}</b> 条线（${how}）`;
+}
+
+async function loadDocuments() {
+  try {
+    const res = await fetch('/api/documents');
+    const data = await res.json();
+    const box = $('docList');
+    box.innerHTML = '';
+    $('docCount').textContent = `共 ${data.total} 份`;
+    const label = { active: '现行有效', repealed: '已废止', pending: '尚未生效' };
+    data.items.forEach(d => {
+      const item = el('div', 'doc-item');
+      const title = el('div', 't');
+      title.appendChild(el('span', `status-dot ${d.status}`));
+      title.appendChild(document.createTextNode(d.title));
+      item.appendChild(title);
+      item.appendChild(el('div', 'm',
+        `${d.doc_no} · ${label[d.status] || d.status}` +
+        (d.effective_date ? ` · 施行 ${d.effective_date}` : '') +
+        (d.supersedes ? ` · 替代 ${d.supersedes}` : '')
+      ));
+      box.appendChild(item);
+    });
+    if (!data.items.length) box.innerHTML = '<div class="empty">知识库为空</div>';
+  } catch (e) {
+    $('docList').innerHTML = '<div class="empty">加载失败</div>';
+  }
+}
+
+/* ── 历史列表 ── */
+function renderHistory() {
+  const box = $('history');
+  box.innerHTML = '';
+  $('histCount').textContent = history.length ? `${history.length} 条` : '';
+
+  if (!history.length) {
+    box.innerHTML = '<div class="empty">还没有提问记录</div>';
+    return;
+  }
+
+  history.forEach((rec, idx) => {
+    const item = el('div', 'hist-item' + (idx === activeIndex ? ' active' : ''));
+    item.appendChild(el('div', 'hq', rec.question));
+
+    const meta = el('div', 'hm');
+    const time = new Date(rec.at).toLocaleTimeString('zh-CN', { hour12: false });
+    meta.appendChild(document.createTextNode(time));
+    meta.appendChild(el('span', 'dot'));
+    const tag = rec.pending ? '检索中' : (rec.refused ? '拒答' : `${(rec.clauses || []).length} 条依据`);
+    const tagNode = el('span', rec.refused ? 'refused' : null, tag);
+    meta.appendChild(tagNode);
+    item.appendChild(meta);
+
+    item.onclick = () => { activeIndex = idx; renderHistory(); renderCurrent(); };
+    box.appendChild(item);
+  });
+}
+
+/* ── 当前答案区 ── */
+function renderSources(container, clauses) {
+  if (!clauses || !clauses.length) return;
+  const block = el('div', 'src-block');
+  block.appendChild(el('div', 'src-block-title', `依据条款（${clauses.length} 条）· 点击可展开原文核对`));
+  const list = el('div', 'src-list');
+
+  clauses.forEach((c, i) => {
+    const src = el('div', 'src');
+    const head = el('div', 'src-head');
+    head.appendChild(el('span', 'badge gray', `依据 ${i + 1}`));
+    head.appendChild(el('b', null, c.citation || `《${c.title}》（${c.doc_no}）${c.clause_no}`));
+    if (c.clause_title) head.appendChild(document.createTextNode(c.clause_title));
+    if (typeof c.similarity === 'number') {
+      head.appendChild(el('span', 'badge ok', `相似度 ${(c.similarity * 100).toFixed(0)}%`));
+    }
+    const toggle = el('span', 'src-toggle', '展开原文');
+    toggle.onclick = (ev) => {
+      ev.stopPropagation();
+      src.classList.toggle('open');
+      toggle.textContent = src.classList.contains('open') ? '收起' : '展开原文';
+    };
+    head.appendChild(toggle);
+    src.appendChild(head);
+    src.appendChild(el('div', 'src-body', c.content || ''));
+    src.onclick = () => toggle.onclick({ stopPropagation() {} });
+    list.appendChild(src);
+  });
+
+  block.appendChild(list);
+  container.appendChild(block);
+}
+
+function renderCurrent() {
+  const box = $('current');
+  box.innerHTML = '';
+
+  if (activeIndex < 0 || !history[activeIndex]) {
+    box.innerHTML = '<div class="empty">输入问题开始检索制度条款</div>';
+    return;
+  }
+
+  const rec = history[activeIndex];
+
+  // 检索范围提示随当前这一条答案走，回看历史时也显示当时是在哪个条线找的
+  if (!rec.pending && !rec.error) renderScope(rec.businessLine, rec.strategy);
+
+  const meta = el('div', 'qa-meta');
+  if (rec.strategy) meta.appendChild(el('span', 'badge', rec.strategy));
+  if (rec.fromCache) meta.appendChild(el('span', 'badge gray', '缓存命中'));
+  if (rec.businessLine) meta.appendChild(el('span', 'badge gray', rec.businessLine));
+  if (rec.grounded === true && !rec.refused) meta.appendChild(el('span', 'badge ok', '引用校验通过'));
+  if (rec.grounded === false && !rec.refused) meta.appendChild(el('span', 'badge warn', '引用校验未通过'));
+  if (rec.refused) meta.appendChild(el('span', 'badge warn', '已拒答'));
+  if (rec.pending) meta.appendChild(el('span', 'badge gray', '检索中'));
+  meta.appendChild(el('span', 'badge gray', new Date(rec.at).toLocaleString('zh-CN', { hour12: false })));
+
+  box.appendChild(meta);
+  box.appendChild(el('div', 'q-text', rec.question));
+
+  const body = el('div', 'answer-body');
+  if (rec.pending) {
+    body.classList.add('loading-dots');
+    body.textContent = '';
+  } else {
+    body.textContent = rec.error || rec.answer || '';
+    if (rec.refused) body.classList.add('refused');
+  }
+  box.appendChild(body);
+
+  if (!rec.pending && !rec.error) renderSources(box, rec.clauses);
+  box.scrollTop = 0;
+}
+
+async function ask() {
+  const question = $('question').value.trim();
+  if (!question || busy) return;
+
+  busy = true;
+  $('send').disabled = true;
+
+  const rec = {
+    question,
+    at: Date.now(),
+    pending: true,
+    answer: '', clauses: [], refused: false
+  };
+  history.push(rec);
+  activeIndex = history.length - 1;
+  $('question').value = '';
+  renderHistory();
+  renderCurrent();
+
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        session_id: sessionId
+      })
+    });
+    const data = await res.json();
+    rec.pending = false;
+
+    if (data.error) {
+      rec.error = data.error;
+    } else {
+      sessionId = data.session_id || sessionId;
+      rec.strategy = data.strategy;
+      rec.fromCache = data.from_cache;
+      rec.businessLine = data.business_line;
+      rec.answer = data.answer || '';
+      rec.refused = !!data.refused;
+      rec.grounded = data.grounded;
+      rec.clauses = data.clauses || [];
+    }
+  } catch (e) {
+    rec.pending = false;
+    rec.error = `请求失败：${e.message}`;
+  } finally {
+    busy = false;
+    $('send').disabled = false;
+    renderHistory();
+    renderCurrent();
+  }
+}
+
+function initSamples() {
+  const box = $('samples');
+  SAMPLE_QUESTIONS.forEach(q => {
+    const chip = el('div', 'chip', q);
+    chip.onclick = () => {
+      $('question').value = q;
+      ask();
+    };
+    box.appendChild(chip);
+  });
+}
+
+$('send').onclick = ask;
+$('question').addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask();
+});
+$('reset').onclick = async () => {
+  if (sessionId) {
+    await fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId })
+    }).catch(() => {});
+  }
+  sessionId = null;
+  history.length = 0;
+  activeIndex = -1;
+  renderHistory();
+  renderCurrent();
+};
+
+loadOverview();
+loadDocuments();
+initSamples();
+renderHistory();
+</script>
+</body>
+</html>

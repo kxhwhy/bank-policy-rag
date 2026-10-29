@@ -1,0 +1,403 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>恒信银行制度智能问答 · 系统架构图</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1c2430;
+    --ink-2: #57637a;
+    --ink-3: #8b95a9;
+    --line: #d7dde6;
+    --brand: #b4232a;
+    --brand-soft: #fdf2f3;
+    --blue: #1f5fa8;
+    --blue-soft: #eef4fb;
+    --green: #1f8b4c;
+    --green-soft: #eef8f1;
+    --amber: #b46a1c;
+    --amber-soft: #fdf6ec;
+    --purple: #6b46a8;
+    --purple-soft: #f3effa;
+    --gray-soft: #f6f7f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 28px 32px 40px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .doc-title { font-size: 20px; font-weight: 700; letter-spacing: .3px; margin: 0 0 4px; }
+  .doc-sub { color: var(--ink-3); font-size: 12.5px; margin-bottom: 20px; }
+
+  .canvas { max-width: 1200px; margin: 0 auto; }
+
+  /* ── 泳道 ── */
+  .lane {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .lane-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 14px;
+    background: var(--gray-soft);
+    border-bottom: 1px solid var(--line);
+    font-weight: 650; font-size: 13px;
+  }
+  .lane-head .tag {
+    font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 4px;
+    background: #fff; border: 1px solid var(--line); color: var(--ink-2);
+  }
+  .lane-head .note { margin-left: auto; font-weight: 400; color: var(--ink-3); font-size: 11.5px; }
+  .lane-body { padding: 14px; display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+
+  /* ── 节点 ── */
+  .node {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px 12px;
+    background: #fff;
+    min-width: 0;
+    flex: 1 1 0;
+  }
+  .node .n-title { font-weight: 650; font-size: 12.5px; margin-bottom: 3px; }
+  .node .n-desc { color: var(--ink-2); font-size: 11.5px; line-height: 1.45; }
+  .node .n-meta { margin-top: 5px; color: var(--ink-3); font-size: 11px; font-family: ui-monospace, Consolas, monospace; }
+  .node.brand { border-left: 3px solid var(--brand); }
+  .node.blue  { border-left: 3px solid var(--blue); }
+  .node.green { border-left: 3px solid var(--green); }
+  .node.amber { border-left: 3px solid var(--amber); }
+  .node.purple{ border-left: 3px solid var(--purple); }
+  .node.solid-brand { background: var(--brand-soft); border-color: #f0cdd0; }
+  .node.solid-blue  { background: var(--blue-soft); border-color: #cddff2; }
+  .node.solid-green { background: var(--green-soft); border-color: #cfe9d9; }
+  .node.solid-amber { background: var(--amber-soft); border-color: #f2e4cc; }
+  .node.solid-purple{ background: var(--purple-soft); border-color: #ddd0f2; }
+
+  /* ── 箭头 ── */
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-3); font-size: 15px; flex: 0 0 auto; align-self: center;
+  }
+  .v-arrow {
+    text-align: center; color: var(--ink-3); font-size: 15px;
+    line-height: 1; margin: 4px 0; position: relative;
+  }
+  .v-arrow span { font-size: 11px; color: var(--ink-3); }
+
+  /* ── 存储层并列 ── */
+  .store-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; }
+
+  /* ── 分支块 ── */
+  .branch {
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #fcfcfd;
+    flex: 1 1 0;
+  }
+  .branch .b-title { font-weight: 650; font-size: 12px; margin-bottom: 5px; color: var(--ink); }
+  .branch .b-body { font-size: 11.5px; color: var(--ink-2); line-height: 1.55; }
+  .branch .b-body code {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 10.5px; background: #f0f2f5; padding: 0 3px; border-radius: 3px;
+  }
+
+  .kicker {
+    display: inline-block; font-size: 10.5px; padding: 0 6px; border-radius: 4px;
+    font-weight: 600; letter-spacing: .3px;
+  }
+  .k-red { background: var(--brand-soft); color: var(--brand); }
+  .k-blue { background: var(--blue-soft); color: var(--blue); }
+  .k-green { background: var(--green-soft); color: var(--green); }
+  .k-amber { background: var(--amber-soft); color: var(--amber); }
+  .k-purple { background: var(--purple-soft); color: var(--purple); }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px;
+    padding-top: 14px; border-top: 1px solid var(--line);
+    color: var(--ink-3); font-size: 11.5px;
+  }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+  .footnote {
+    margin-top: 14px; padding: 10px 14px;
+    background: var(--gray-soft); border-left: 3px solid var(--ink-3);
+    border-radius: 6px; color: var(--ink-2); font-size: 11.5px; line-height: 1.6;
+  }
+  .footnote b { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+  <h1 class="doc-title">恒信银行制度智能问答 · 系统架构</h1>
+  <div class="doc-sub">双链路设计：离线入库（制度→可检索） + 在线问答（问题→有据可查的答案）</div>
+
+  <!-- ═══════════ 链路 A：离线入库 ═══════════ -->
+  <div class="lane">
+    <div class="lane-head">
+      <span class="kicker k-blue">链路 A</span>
+      离线入库管道
+      <span class="tag">scripts/ingest.py</span>
+      <span class="note">制度换版时重跑，幂等：同文号先删后插</span>
+    </div>
+    <div class="lane-body">
+      <div class="node blue">
+        <div class="n-title">制度原文</div>
+        <div class="n-desc">Markdown 格式的制度文件，含文号、章节、第 X 条</div>
+        <div class="n-meta">data/raw/*.md</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node blue">
+        <div class="n-title">解析 Parser</div>
+        <div class="n-desc">按「第X条」切分条款；全角〔〕归一化；中文数字转整</div>
+        <div class="n-meta">parse_document()</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node blue">
+        <div class="n-title">父子切块 Chunker</div>
+        <div class="n-desc">父块 1200 字保完整语境，子块 300/60 重叠保检索精度</div>
+        <div class="n-meta">build_chunks()</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node solid-blue">
+        <div class="n-title">BGE-M3 编码</div>
+        <div class="n-desc">一次推理同时出稠密 1024 维 + 稀疏权重</div>
+        <div class="n-meta">encode() → dense / sparse</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="node solid-blue" style="flex:1.2 1 0;">
+        <div class="n-title">双写落库</div>
+        <div class="n-desc">MySQL 存结构与效力状态；Milvus 存双向量 + 标量字段</div>
+        <div class="n-meta">upsert_document / replace_clauses / upsert_clauses</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 链路 B：在线问答 ═══════════ -->
+  <div class="lane">
+    <div class="lane-head">
+      <span class="kicker k-red">链路 B</span>
+      在线问答
+      <span class="tag">POST /api/ask</span>
+      <span class="note">逐层降级：任一层不可用都不阻断问答</span>
+    </div>
+    <div class="lane-body" style="flex-direction: column; gap: 0;">
+
+      <!-- B1 接入层 -->
+      <div style="display:flex; gap:10px; width:100%;">
+        <div class="node brand" style="flex:0 0 178px;">
+          <div class="n-title">前端页面</div>
+          <div class="n-desc">三栏：历史提问 / 当前答案 / 制度清单</div>
+          <div class="n-meta">web/static/index.html</div>
+        </div>
+        <div class="arrow">⇄</div>
+        <div class="node brand">
+          <div class="n-title">FastAPI 服务</div>
+          <div class="n-desc"><code>/api/ask</code> <code>/api/ask/stream</code> <code>/api/documents</code> <code>/api/overview</code> <code>/api/reset</code></div>
+          <div class="n-meta">api.py</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node solid-brand">
+          <div class="n-title">编排层 PolicyQASystem</div>
+          <div class="n-desc">一次问答的完整链路控制；会话历史只补指代，不当依据</div>
+          <div class="n-meta">core/qa_system.py · ask() / ask_stream()</div>
+        </div>
+      </div>
+
+      <div class="v-arrow">↓</div>
+
+      <!-- B2 缓存 -->
+      <div class="node solid-amber" style="width:100%;">
+        <div class="n-title">① 问答缓存 <span class="kicker k-amber">快捷出口</span></div>
+        <div class="n-desc">
+          键 = 业务条线 + 基准日 + 归一化问题指纹（剥掉"请问/帮我"等噪声词）；
+          命中则直接返回，整条链路不再执行。
+        </div>
+        <div class="n-meta">core/store/qa_cache.py · Redis db3 · key: policy_qa:&lt;sha256前32位&gt;</div>
+      </div>
+
+      <div class="v-arrow">↓ <span>未命中</span></div>
+
+      <!-- B3 策略 -->
+      <div class="node solid-purple" style="width:100%;">
+        <div class="n-title">② 查询策略判定 <span class="kicker k-purple">规则优先 · 模型兜底</span></div>
+        <div class="n-desc" style="margin-bottom:8px;">
+          能靠正则判的绝不调模型——模型会把简单问题复杂化，反而把原句拆坏。
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div class="branch">
+            <div class="b-title">直接检索</div>
+            <div class="b-body">≤30 字且无其他特征<br>原句直接用，<b>0 次模型调用</b></div>
+          </div>
+          <div class="branch">
+            <div class="b-title">子查询检索</div>
+            <div class="b-body">含 <code>和/与/、/分别/各自</code><br>且 &gt;12 字 → 拆成多个子问题</div>
+          </div>
+          <div class="branch">
+            <div class="b-title">回溯检索</div>
+            <div class="b-body">含 <code>数字+单位</code> 或 <code>能不能</code><br>个案细节 → 抽象成规则问题</div>
+          </div>
+          <div class="branch">
+            <div class="b-title">情境补全</div>
+            <div class="b-body">有历史且含 <code>那/这个/它</code><br>或 ≤8 字 → 结合上文补全</div>
+          </div>
+        </div>
+        <div class="n-meta">core/rag/query_analyzer.py · select() / rewrite()</div>
+      </div>
+
+      <div class="v-arrow">↓ <span>得到 1~3 条检索式</span></div>
+
+      <!-- B4 检索 -->
+      <div style="display:flex; gap:10px; width:100%;">
+        <div class="node solid-green" style="flex:1 1 0;">
+          <div class="n-title">③ 混合召回</div>
+          <div class="n-desc">稠密向量 0.7 + 稀疏 0.3 融合，取 top 8；<b>不在此做效力过滤</b></div>
+          <div class="n-meta">vector_store.hybrid_search() · Milvus</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node solid-green" style="flex:1.15 1 0;">
+          <div class="n-title">④ 回表 + 时效硬校验</div>
+          <div class="n-desc">按 id 查 MySQL 取全文；<code>status≠active</code> 或 <code>施行日&gt;基准日</code> 一律剔除</div>
+          <div class="n-meta">db.get_clause() + _is_effective()</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node solid-green" style="flex:1 1 0;">
+          <div class="n-title">⑤ 去重 + 阈值截断</div>
+          <div class="n-desc">同条款取最高分；低于 0.35 全丢，宁可无依据也不凑数</div>
+          <div class="n-meta">min_similarity = 0.35</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node solid-green" style="flex:1 1 0;">
+          <div class="n-title">⑥ 交叉编码器重排</div>
+          <div class="n-desc">向量分问"像不像"，重排问"能不能答"；精排取 top 3</div>
+          <div class="n-meta">bge-reranker-large · rerank()</div>
+        </div>
+      </div>
+
+      <div class="v-arrow">↓</div>
+
+      <!-- B5 生成分支 -->
+      <div style="display:flex; gap:10px; width:100%;">
+        <div class="node solid-brand" style="flex:1 1 0;">
+          <div class="n-title">⑦ 生成 + 引用校验</div>
+          <div class="n-desc">
+            逐句标注出处；数字必须能在原文找到，查不到即判未通过。
+            未通过先重生成，仍不过关则<b>降级为条款直读</b>。
+          </div>
+          <div class="n-meta">answer.generate() / check_grounding()</div>
+        </div>
+        <div class="arrow">→</div>
+        <div class="node brand" style="flex:0 0 210px; background:#fff6f6;">
+          <div class="n-title">无依据 → 拒答</div>
+          <div class="n-desc">召不回或全低于阈值时明确说"制度库中未检索到"，不拿模型先验编</div>
+          <div class="n-meta">refused = true</div>
+        </div>
+      </div>
+
+      <div class="v-arrow">↓ <span>写缓存（拒答不写）</span></div>
+
+      <div class="node solid-brand" style="width:100%;">
+        <div class="n-title">⑧ 返回结构化结果</div>
+        <div class="n-desc">
+          <code>answer</code> ·
+          <code>refused</code> ·
+          <code>grounded</code> ·
+          <code>citations[]</code>（标准引用格式）·
+          <code>clauses[]</code>（可展开原文核对）·
+          <code>strategy</code> ·
+          <code>queries[]</code> ·
+          <code>from_cache</code> ·
+          <code>as_of</code>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══════════ 存储层 ═══════════ -->
+  <div class="lane">
+    <div class="lane-head">
+      <span class="kicker k-amber">存储层</span>
+      三个存储各司其职，职责不重叠
+    </div>
+    <div class="lane-body">
+      <div class="store-grid">
+        <div class="node solid-blue">
+          <div class="n-title">MySQL · bank_policy</div>
+          <div class="n-desc">
+            <b>唯一事实源</b>。存 <code>documents</code>（文号/状态/施行日/替代关系）
+            与 <code>clauses</code>（条文/章节/业务条线）。
+          </div>
+          <div class="n-meta">为什么在这里：效力判断要结构化字段，向量库只有文本</div>
+        </div>
+        <div class="node solid-green">
+          <div class="n-title">Milvus · policy_clause</div>
+          <div class="n-desc">
+            稠密 1024 维 + 稀疏倒排双索引，标量字段支持按业务条线过滤。
+            只负责"找得到"，不负责"能不能用"。
+          </div>
+          <div class="n-meta">为什么在这里：MySQL 做不了语义相似度检索</div>
+        </div>
+        <div class="node solid-amber">
+          <div class="n-title">Redis · db3</div>
+          <div class="n-desc">
+            问答结果缓存，TTL 24h。与 Milvus 元数据的 db0 隔离，键前缀
+            <code>policy_qa:</code> 不冲突。
+          </div>
+          <div class="n-meta">为什么在这里：同一问题重复问不必重跑全链路</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ 模型层 ═══════════ -->
+  <div class="lane">
+    <div class="lane-head">
+      <span class="kicker k-purple">模型层</span>
+      三个模型，各管一段
+    </div>
+    <div class="lane-body">
+      <div class="node solid-purple">
+        <div class="n-title">BGE-M3 · 本地 2.2G</div>
+        <div class="n-desc">一次推理同时产出稠密与稀疏向量，入库与召回共用同一模型，保证向量空间一致</div>
+      </div>
+      <div class="node solid-purple">
+        <div class="n-title">bge-reranker-large · 本地 2.1G</div>
+        <div class="n-desc">交叉编码器逐对打分，把"整体相似"和"能回答问题"区分开</div>
+      </div>
+      <div class="node solid-purple">
+        <div class="n-title">DeepSeek-chat · 远程</div>
+        <div class="n-desc">生成答案与策略兜底判定；temperature 0.1 压低发挥空间，减少编造</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:#1f5fa8;"></i>离线入库</span>
+    <span><i style="background:#b4232a;"></i>在线问答</span>
+    <span><i style="background:#1f8b4c;"></i>检索与校验</span>
+    <span><i style="background:#b46a1c;"></i>缓存</span>
+    <span><i style="background:#6b46a8;"></i>模型与策略</span>
+  </div>
+
+  <div class="footnote">
+    <b>设计主线：三层降级，任一层失效都不阻断问答。</b>
+    缓存不可用 → 照常走全链路；重排不可用 → 退回向量排序；模型不可用 → 降级为条款直读并明示；
+    向量召回为空或全低于阈值 → 拒答而不是编。
+    每一处降级都在页面上可见，不静默降级。
+  </div>
+
+</div>
+</body>
+</html>

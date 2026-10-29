@@ -1,0 +1,45 @@
+# 构建镜像时忽略的文件，作用跟 .gitignore 类似但两者互不影响。
+#
+# 为什么要单独写：不加的话 docker build 会把整个目录塞进构建上下文（build context）
+# 传给 Docker daemon。这个项目 models/ 下有 4.3GB 权重，不排除的话每次构建要传 4.3GB，
+# 慢到无法接受，而且镜像里也根本不需要——模型是运行时用 volume 挂进去的。
+
+# 虚拟环境（宿主机专用，容器里重新装）
+.venv/
+.venv-ragas/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 模型权重：运行时通过 volume 挂载，不打进镜像
+# 理由：打进去镜像会有 4GB+，推不上 Docker Hub 也传不动；且模型和代码的更新
+# 节奏不同，绑在一起每次改代码都要重新拷 4GB
+models/
+*.pth
+*.onnx
+*.safetensors
+*.bin
+
+# 运行产物
+logs/
+outputs/
+data/processed/
+
+# 版本控制与 IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# 本地配置与密钥：绝不进镜像
+config.local.ini
+.env
+*.local.ini
+
+# 文档（容器里用不到）
+*.md
+!README.md
+docs/

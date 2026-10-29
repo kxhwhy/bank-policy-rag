@@ -1,0 +1,21 @@
+{
+  "answerable": {
+    "faithfulness": 0.7204,
+    "answer_relevancy": 0.8806,
+    "context_precision": 0.9405,
+    "context_recall": 0.9643,
+    "faithfulness_no_citation": 0.9452,
+    "citation_bias": -0.2248
+  },
+  "refusable": {
+    "total": 4,
+    "refused_correctly": 4,
+    "refusal_accuracy": 1.0
+  },
+  "meta": {
+    "total": 32,
+    "answerable": 28,
+    "refusable": 4,
+    "degraded": 0
+  }
+}

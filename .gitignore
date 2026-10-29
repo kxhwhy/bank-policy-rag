@@ -1,0 +1,37 @@
+# 依赖
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-ragas/
+venv/
+env/
+
+# 本地配置与密钥
+config.local.ini
+.env
+*.local.ini
+
+# 模型权重（体积大，按需自行下载到 models/ 下）
+models/
+*.pth
+*.onnx
+*.safetensors
+*.bin
+
+# 运行产物
+logs/
+outputs/
+*.log
+.idea/
+.vscode/
+.DS_Store
+
+# Docker 构建与运行产物
+# docker compose 起的 MySQL/Redis 数据落在命名卷里，不在仓库目录；
+# 但如果有人改成 bind mount 到 ./mysql-data 这类路径，这些也要排除
+mysql-data/
+redis-data/
+etcd-data/
+minio-data/
+milvus-data/

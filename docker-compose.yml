@@ -1,0 +1,194 @@
+# 一键起服务：应用 + MySQL + Redis + Milvus（含 etcd、minio）
+#
+# 用法：
+#   docker compose up -d --build        # 首次构建并启动
+#   docker compose ps                   # 看状态
+#   docker compose logs -f app          # 跟应用日志
+#   docker compose down                 # 停止并删除容器（数据卷保留）
+#   docker compose down -v              # 连数据一起删（下次起来是空库，要重新 ingest）
+#
+# 注意：本机已有 E:\milvus_redis 那套 milvus-* 容器在跑，端口 19530/6379 会被占。
+# 用这套 compose 前要先停掉旧的：
+#   docker stop milvus-standalone milvus-etcd milvus-redis milvus-minio
+
+name: bank-policy-rag
+
+services:
+  # ---------- 应用 ----------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bank-policy-rag:latest
+    container_name: policy-app
+    ports:
+      - "8000:8000"
+    environment:
+      # 服务名当主机名。compose 自带 DNS，容器之间用 service 名互相访问，
+      # 不用 IP——IP 每次重建都会变。
+      POLICY_MYSQL_HOST: mysql
+      POLICY_MYSQL_PORT: "3306"
+      POLICY_MYSQL_USER: root
+      POLICY_MYSQL_PASSWORD: ${POLICY_MYSQL_PASSWORD:-root}
+      POLICY_MYSQL_DATABASE: bank_policy
+
+      POLICY_REDIS_HOST: redis
+      POLICY_REDIS_PORT: "6379"
+      POLICY_REDIS_PASSWORD: ${POLICY_REDIS_PASSWORD:-1234}
+
+      POLICY_MILVUS_URI: http://milvus:19530
+
+      # LLM 配置。key 从宿主机环境变量或 .env 文件读，不写进 compose 文件。
+      POLICY_LLM_API_KEY: ${POLICY_LLM_API_KEY:-}
+      POLICY_LLM_BASE_URL: ${POLICY_LLM_BASE_URL:-https://api.deepseek.com/v1}
+      POLICY_LLM_MODEL: ${POLICY_LLM_MODEL:-deepseek-chat}
+
+      # 模型走本地挂载，不让它联网下载
+      POLICY_EMBEDDING_MODEL: /app/models/bge-m3
+      POLICY_RERANK_MODEL_PATH: /app/models/bge-reranker-large
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      # 模型只读挂载：4.3GB 权重没必要打进镜像，宿主机的模型两边共用一份
+      - ./models:/app/models:ro
+      # 制度原文：放新文件后要重新跑 ingest
+      - ./data/raw:/app/data/raw:ro
+      # 日志与解析中间产物要能写，不能用 :ro
+      - ./logs:/app/logs
+      - ./data/processed:/app/data/processed
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/overview"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  # ---------- MySQL ----------
+  mysql:
+    image: mysql:8.0
+    container_name: policy-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${POLICY_MYSQL_PASSWORD:-root}
+      MYSQL_DATABASE: bank_policy
+      TZ: Asia/Shanghai
+    ports:
+      # 只映射到宿主机 127.0.0.1，不暴露到局域网。
+      # 写 "3306:3306" 会监听 0.0.0.0，同网段任何人都能连库。
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      # mysqladmin ping 要带 -p 才能真正确认服务可用（不带密码时匿名也能 ping 通，
+      # 会误判为健康，导致 app 抢在初始化完成前启动）
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${POLICY_MYSQL_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      start_period: 40s
+      retries: 10
+    restart: unless-stopped
+
+  # ---------- Redis ----------
+  redis:
+    image: redis:7-alpine
+    container_name: policy-redis
+    command:
+      - redis-server
+      - --requirepass
+      - ${POLICY_REDIS_PASSWORD:-1234}
+      - --appendonly
+      - "yes"
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${POLICY_REDIS_PASSWORD:-1234}", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------- Milvus 三件套：etcd（元数据）+ minio（对象存储）+ milvus ----------
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: policy-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: >
+      etcd --advertise-client-urls http://etcd:2379
+      --listen-client-urls http://0.0.0.0:2379
+      --data-dir /etcd
+    volumes:
+      - etcd-data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    container_name: policy-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    command: minio server /minio_data --console-address ":9001"
+    volumes:
+      - minio-data:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  milvus:
+    image: milvusdb/milvus:v2.4.4
+    container_name: policy-milvus
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "19531:19530"
+      - "9092:9091"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      start_period: 90s
+      retries: 5
+    restart: unless-stopped
+
+# 命名卷：数据留在 Docker 管理的卷里，容器删了重建数据还在。
+# 用 bind mount（./mysql-data:/var/lib/mysql）在 Windows 上会有权限问题，
+# 命名卷不经过宿主文件系统，没有这个问题。
+volumes:
+  mysql-data:
+  redis-data:
+  etcd-data:
+  minio-data:
+  milvus-data:
